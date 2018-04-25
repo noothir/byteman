@@ -911,7 +911,7 @@ public class Transformer implements ClassFileTransformer {
         // the super class. this may cause us to miss the chance to apply rule injection into the super
 
         ClassLoader loader = baseLoader;
-        Class clazz = loadCache.lookupClass(name, loader);
+        Class clazz = null;
 
         if (clazz != null) {
             return new org.jboss.byteman.agent.check.LoadedClassChecker(clazz);
