@@ -23,6 +23,7 @@
 */
 package org.jboss.byteman.agent;
 
+import org.jboss.byteman.agent.check.BytecodeChecker;
 import org.jboss.byteman.agent.check.ClassChecker;
 import org.jboss.byteman.agent.check.LoadCache;
 import org.jboss.byteman.modules.ModuleSystem;
@@ -897,6 +898,11 @@ public class Transformer implements ClassFileTransformer {
      */
     public org.jboss.byteman.agent.check.ClassChecker getClassChecker(String name, ClassLoader baseLoader)
     {
+
+        org.jboss.byteman.agent.check.ClassChecker cachedChecker = lookupClassChecker(name, baseLoader);
+        if(cachedChecker!=null)
+            return cachedChecker;
+
         // we would like to just do this
         // Class superClazz = baseLoader.loadClass(name)
         // and then access the details using methods of Class
@@ -933,7 +939,9 @@ public class Transformer implements ClassFileTransformer {
                     }
                     count += read;
                 }
-                return new org.jboss.byteman.agent.check.BytecodeChecker(bytecode);
+                BytecodeChecker bytecodeChecker = new BytecodeChecker(bytecode);
+                cacheChecker(name, baseLoader, bytecodeChecker);
+                return bytecodeChecker;
             } else {
                 // throw new IOException("unable to load bytecode for for class " + name);
                 Helper.verbose("Transformer.getClassChecker : unable to load bytecode for for class " + name);
@@ -945,6 +953,33 @@ public class Transformer implements ClassFileTransformer {
             Helper.errTraceException(e);
             return null;
         }
+    }
+
+    static {
+        System.out.println("----------> #### Transformer.static initializer #### <-----------");
+    }
+    private final Map<ClassLoader, Map<String, ClassChecker>> loaderMaps = Collections.synchronizedMap(new WeakHashMap<ClassLoader, Map<String, ClassChecker>>());
+
+    private ClassChecker lookupClassChecker(String name, ClassLoader baseLoader) {
+        Map<String, ClassChecker> baseLoaderMap = loaderMaps.get(baseLoader);
+        if (baseLoaderMap == null) {
+            return null;
+        }
+        ClassChecker checker = baseLoaderMap.get(name);
+        System.out.printf("Transformer.lookupClassChecker name:%s loader:%s checker:%s\n ", name, baseLoader, checker);
+        return checker;
+    }
+
+    private void cacheChecker(String name, ClassLoader baseLoader, BytecodeChecker checker) {
+        Map<String, ClassChecker> baseLoaderMap = null;
+        synchronized (loaderMaps) {
+            baseLoaderMap = loaderMaps.get(baseLoader);
+            if (baseLoaderMap == null) {
+                baseLoaderMap = Collections.synchronizedMap(new HashMap<String, ClassChecker>());
+                loaderMaps.put(baseLoader, baseLoaderMap);
+            }
+        }
+        baseLoaderMap.put(name, checker);
     }
 
     /**
